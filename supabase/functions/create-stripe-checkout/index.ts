@@ -41,6 +41,16 @@ serve(async (req) => {
       'prod_SyYVIP': { plan_id: 'plan_vip', credits: 4000, price: 25, currency: 'usd' },
     };
 
+    // Map to support frontends that send only packageId (pkg1, pkg2, ...)
+    const PACKAGE_ID_MAP: Record<string, { stripe_product_id: string; credits: number; price: number; bonus?: number }> = {
+      'pkg1': { stripe_product_id: 'prod_SyYasByos1peGR', credits: 200, price: 2.0 },
+      'pkg2': { stripe_product_id: 'prod_SyYeStqRDuWGFF', credits: 500, price: 5.0 },
+      'pkg3': { stripe_product_id: 'prod_SyYfzJ1fjz9zb9', credits: 1000, price: 10.0 },
+      'pkg4': { stripe_product_id: 'prod_SyYmVrUetdiIBY', credits: 2500, price: 25.0 },
+      'pkg5': { stripe_product_id: 'prod_SyYg54VfiOr7LQ', credits: 5000, price: 50.0 },
+      'pkg6': { stripe_product_id: 'prod_SyYhva8A2beAw6', credits: 10000, price: 100.0 },
+    };
+
     // Get authenticated user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -87,14 +97,16 @@ serve(async (req) => {
       }
 
       const fallback = stripeProductId ? CREDIT_PACKAGE_MAP[stripeProductId] : undefined;
-      const productId = pkg?.stripe_product_id || stripeProductId || null;
-      const finalCredits = pkg?.credits ?? fallback?.credits;
-      const bonus = pkg?.bonus ?? fallback?.bonus ?? 0;
+      const idFallback = packageId ? PACKAGE_ID_MAP[packageId] : undefined;
+      const productId = pkg?.stripe_product_id || stripeProductId || idFallback?.stripe_product_id || null;
+      const finalCredits = pkg?.credits ?? fallback?.credits ?? idFallback?.credits;
+      const bonus = pkg?.bonus ?? fallback?.bonus ?? idFallback?.bonus ?? 0;
       const finalAmountCents = typeof pkg?.price === 'number' ? Math.round(pkg.price * 100)
-        : (fallback?.price ? Math.round(fallback.price * 100) : undefined);
+        : (fallback?.price ? Math.round(fallback.price * 100)
+        : (idFallback?.price ? Math.round(idFallback.price * 100) : undefined));
 
       if (!productId && finalAmountCents === undefined) {
-        console.error('Package not found in DB and no fallback available');
+        console.error('Package not found. Debug:', { packageId, stripeProductId });
         throw new Error('Credit package not found');
       }
 
